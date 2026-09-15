@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ "Log in" if mode == "login" else "Create account" }} · Serper Data Scraper</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+</head>
+<body class="auth-body">
+<main class="auth-wrap">
+  <div class="auth-brand">
+    <span class="logo">📍</span>
+    <h1>Serper Data Scraper</h1>
+    <p>Google Maps, Search, Reviews, News, Shopping &amp; Webpage data — exported to CSV and Excel.</p>
+  </div>
+
+  <div class="panel auth-card">
+    <div class="auth-tabs">
+      <a href="{{ url_for('login_page') }}" class="{{ 'active' if mode == 'login' }}">Log in</a>
+      <a href="{{ url_for('signup_page') }}" class="{{ 'active' if mode == 'signup' }}">Create account</a>
+    </div>
+
+    <form id="authForm" data-mode="{{ mode }}" novalidate>
+      {% if mode == "signup" %}
+      <label class="lbl" for="name">Name <small>(optional)</small></label>
+      <input id="name" name="name" type="text" autocomplete="name" placeholder="Your name">
+      {% endif %}
+      <label class="lbl" for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com">
+      <label class="lbl" for="password">Password {% if mode == "signup" %}<small>(min 8 characters)</small>{% endif %}</label>
+      <div class="pw-row">
+        <input id="password" name="password" type="password" required minlength="8"
+               autocomplete="{{ 'current-password' if mode == 'login' else 'new-password' }}" placeholder="••••••••">
+        <button type="button" class="btn ghost sm" data-toggle-pw="password">Show</button>
+      </div>
+      <p class="err" id="formErr" hidden></p>
+      <button class="btn primary big" type="submit" id="submitBtn">{{ "Log in" if mode == "login" else "Create account" }}</button>
+      <p class="hint center">
+        {% if mode == "login" %}New here? <a href="{{ url_for('signup_page') }}">Create an account</a>
+        {% else %}Already have an account? <a href="{{ url_for('login_page') }}">Log in</a>{% endif %}
+      </p>
+      <p class="hint center">You stay logged in for 24 hours.</p>
+    </form>
+  </div>
+</main>
+<script src="{{ url_for('static', filename='account.js') }}?v={{ asset_v }}"></script>
+</body>
+</html>

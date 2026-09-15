@@ -1,0 +1,15 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# local data (users, API keys, scraped jobs, session secret)
+data/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# vercel
+.vercel/

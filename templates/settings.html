@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ "Add API key" if first_time else "Settings" }} · Serper Data Scraper</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="logo">📍</span>
+    <div><h1>Serper Data Scraper</h1><p>Account settings</p></div>
+  </a>
+  <div class="user-menu">
+    {% if not first_time %}<a class="btn ghost sm" href="/">← Back to app</a>{% endif %}
+    <span class="user-chip" title="Logged in">{{ user_email }}</span>
+    <a class="btn ghost sm" href="{{ url_for('logout') }}">Log out</a>
+  </div>
+</header>
+
+<main class="settings-wrap">
+  {% if first_time %}
+  <section class="panel welcome">
+    <h2>👋 Welcome{% if user_name %}, {{ user_name }}{% endif %}!</h2>
+    <p>One last step: add your <b>Serper.dev API key</b>. Every account uses its own key, so searches spend your own credits.
+      Get a key at <a href="https://serper.dev/api-keys" target="_blank" rel="noopener">serper.dev/api-keys</a>.</p>
+  </section>
+  {% endif %}
+
+  <section class="panel settings-card" id="keyCard">
+    <h3>🔑 Serper API key</h3>
+    <p class="muted" id="keyStatus">Loading…</p>
+    <form id="keyForm" novalidate>
+      <label class="lbl" for="apiKey">{{ "API key" if first_time else "New API key (replaces the current one)" }}</label>
+      <div class="pw-row">
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Serper API key">
+        <button type="button" class="btn ghost sm" data-toggle-pw="apiKey">Show</button>
+      </div>
+      <p class="hint">We check the key with Serper before saving. It is stored encrypted and only used for your searches.</p>
+      <p class="err" id="keyErr" hidden></p>
+      <p class="ok" id="keyOk" hidden></p>
+      <button class="btn primary" type="submit" id="keyBtn">{{ "Save key & start" if first_time else "Replace API key" }}</button>
+    </form>
+  </section>
+
+  {% if not first_time %}
+  <section class="panel settings-card">
+    <h3>🔒 Change password</h3>
+    <form id="pwForm" novalidate>
+      <label class="lbl" for="pwCurrent">Current password</label>
+      <input id="pwCurrent" type="password" autocomplete="current-password">
+      <label class="lbl" for="pwNew">New password <small>(min 8 characters)</small></label>
+      <input id="pwNew" type="password" autocomplete="new-password">
+      <p class="err" id="pwErr" hidden></p>
+      <p class="ok" id="pwOk" hidden></p>
+      <button class="btn secondary" type="submit">Change password</button>
+    </form>
+  </section>
+
+  <section class="panel settings-card">
+    <h3>🕒 Session</h3>
+    <p class="muted" id="sessionInfo">Loading…</p>
+  </section>
+  {% endif %}
+</main>
+<script>window.FIRST_TIME = {{ "true" if first_time else "false" }};</script>
+<script src="{{ url_for('static', filename='account.js') }}?v={{ asset_v }}"></script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Serper Data Scraper</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="logo">📍</span>
+    <div>
+      <h1>Serper Data Scraper</h1>
+      <p>Google Search · Maps · Places · Reviews · News · Shopping · Webpage and more</p>
+    </div>
+  </a>
+  <div class="user-menu">
+    <span class="credits" id="credits" title="Serper.dev credit balance of your API key">Credits: …</span>
+    <span class="user-chip" title="Logged in">{{ user_email }}</span>
+    <a class="btn ghost sm" href="{{ url_for('settings_page') }}" title="API key &amp; password">⚙ Settings</a>
+    <a class="btn ghost sm" href="{{ url_for('logout') }}">Log out</a>
+  </div>
+</header>
+
+<nav class="tool-tabs" id="toolTabs" aria-label="Data sources"></nav>
+
+<main class="layout">
+  <aside class="panel builder" id="builder"></aside>
+
+  <section class="panel results">
+    <div class="tool-head">
+      <div>
+        <h2 id="toolTitle"></h2>
+        <p class="muted" id="toolDesc"></p>
+      </div>
+      <select id="jobPicker" title="Jobs run in this tab"></select>
+    </div>
+
+    <div class="empty" id="emptyState">
+      <div class="empty-icon" id="emptyIcon">🗂️</div>
+      <h2>No data in this tab yet</h2>
+      <p>Fill in the form on the left and click <b>Start</b>. Only this tab's API runs, and its results appear here live, ready to download as CSV or Excel.</p>
+    </div>
+
+    <div id="jobView" hidden>
+      <div class="job-head">
+        <div>
+          <h3 id="jobTitle">Job</h3>
+          <p class="muted" id="jobMeta"></p>
+        </div>
+        <div class="job-actions">
+          <span class="status" id="jobStatus">queued</span>
+          <button class="btn primary sm" id="resumeBtn" type="button" hidden>▶ Resume</button>
+          <button class="btn danger sm" id="stopBtn" type="button" hidden>■ Stop</button>
+          <button class="btn ghost sm" id="deleteBtn" type="button">🗑 Delete</button>
+        </div>
+      </div>
+      <div class="progress"><div class="bar" id="progBar"></div></div>
+      <p class="save-warn" id="saveWarn" hidden></p>
+      <div class="stats" id="stats"></div>
+      <details class="log-box"><summary>Activity log <span id="errCount"></span></summary><div id="log"></div></details>
+
+      <div class="toolbar" id="filters"></div>
+
+      <div class="export-bar">
+        <span class="muted" id="showing">0 rows</span>
+        <div class="row-btns">
+          <button class="btn secondary sm" id="expCsv" type="button">⬇ Download CSV</button>
+          <button class="btn primary sm" id="expXlsx" type="button">⬇ Download Excel</button>
+        </div>
+      </div>
+
+      <div class="table-wrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+      <div class="pager">
+        <button class="btn ghost sm" id="prevPg" type="button">‹ Prev</button>
+        <span id="pgInfo">1 / 1</span>
+        <button class="btn ghost sm" id="nextPg" type="button">Next ›</button>
+        <select id="pgSize" title="Rows per page"><option>25</option><option selected>50</option><option>100</option><option>250</option><option>500</option><option>1000</option></select>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <b id="modalTitle"></b>
+      <div class="row-btns">
+        <button class="btn secondary sm" id="modalCopy" type="button">Copy</button>
+        <button class="btn ghost sm" id="modalClose" type="button">✕</button>
+      </div>
+    </div>
+    <pre id="modalBody"></pre>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/exceljs.min.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v={{ asset_v }}"></script>
+</body>
+</html>

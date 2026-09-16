@@ -33,7 +33,9 @@ results table, filters, and CSV / Excel download.
 | Where the app runs | Storage |
 |---|---|
 | Your PC | Plain JSON files in `data/` |
-| Vercel | The same JSON documents in a private **Vercel Blob** store (jobs are gzip-compressed) |
+| Vercel | The same JSON documents in **Upstash Redis** (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) or a private **Vercel Blob** store (`BLOB_READ_WRITE_TOKEN`) |
+
+Jobs are gzip-compressed before they are stored.
 
 ```
 users/<sha256(email)>.json          account: email, name, password hash, encrypted API key
@@ -68,13 +70,15 @@ from the earlier single-user version (`data/jobs/`).
 ## Deploy on Vercel
 
 1. Import the GitHub repo in Vercel (framework: *Other*; Vercel detects the Flask `app` in `app.py`).
-2. **Storage → Create → Blob**, choose **Private** access, and connect it to the project. This adds `BLOB_READ_WRITE_TOKEN`.
+2. Add storage and connect it to the project - either:
+   - **Storage → Marketplace → Upstash for Redis** (free plan), which adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or
+   - **Storage → Create → Blob** with **Private** access, which adds `BLOB_READ_WRITE_TOKEN`.
 3. **Settings → Environment Variables**: add `SECRET_KEY` = a long random string. It signs sessions and encrypts API keys; keep it the same or everyone must re-enter their key.
 4. Deploy. `vercel.json` sets the Mumbai region (`bom1`) and a 60 s function limit.
 
-Vercel Blob **Hobby (free) limits**: 1 GB storage, 2,000 writes/lists and 10,000 reads per month. A job typically uses
-3 - 10 writes, depending on how long it runs. If the limit is exceeded, Blob is blocked until the month resets, so upgrade to Pro for heavy use.
-Request bodies are limited to 4.5 MB, so very large Webpage jobs save shortened page text online.
+Free-plan limits worth knowing: Upstash Redis gives 256 MB and 500K commands/month; Vercel Blob gives 1 GB but only
+2,000 writes/lists per month and is blocked for the rest of the month once that is passed.
+Vercel request bodies are limited to 4.5 MB, so very large Webpage jobs save shortened page text online.
 
 ## Big Maps jobs: 1,000 / 5,000 / 10,000+ leads
 

@@ -54,17 +54,29 @@ app.config.update(
     SESSION_COOKIE_NAME="sds_session",
     MAX_CONTENT_LENGTH=(4_400_000 if ON_VERCEL else 60_000_000),  # Vercel request bodies max out at 4.5 MB
 )
-store = get_store()
+try:
+    store, STORE_ERROR = get_store(), ""
+except StorageError as e:  # keep the app up so it can explain what is missing
+    store, STORE_ERROR = None, str(e)
 keybox = KeyBox(app.config["SECRET_KEY"])
 users = Users(store, keybox)
 ASSET_VERSION = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or str(int(time.time())))[:10]
 # Blob writes are limited on the free plan, so save running jobs less often there
-CHECKPOINT_SECONDS = 180 if store.kind == "blob" else 15
+CHECKPOINT_SECONDS = 180 if getattr(store, "kind", "") == "blob" else 30 if getattr(store, "kind", "") == "redis" else 15
 
 
 @app.context_processor
 def inject_globals():
     return {"asset_v": ASSET_VERSION, "user_email": session.get("email", ""), "user_name": session.get("name", "")}
+
+
+@app.before_request
+def storage_check():
+    if store is None and not request.path.startswith("/static"):
+        msg = f"Storage is not configured. {STORE_ERROR}"
+        if request.path.startswith("/api/"):
+            return jsonify({"error": msg}), 503
+        return f"<h1>Setup needed</h1><p>{msg}</p>", 503
 
 
 @app.before_request
@@ -153,7 +165,7 @@ def api_signup():
         return jsonify({"error": err}), 400
     if users.get(email):
         return jsonify({"error": "An account with this email already exists. Please log in."}), 409
-    is_first_local_user = store.kind == "local" and not any((local_data_dir() / "users").glob("*.json"))
+    is_first_local_user = getattr(store, "kind", "") == "local" and not any((local_data_dir() / "users").glob("*.json"))
     user = users.create(email, password, data.get("name") or "")
     if is_first_local_user:
         migrate_legacy_jobs(user["id"])

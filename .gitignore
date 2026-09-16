@@ -1,4 +1,4 @@
-# secrets
+# secrets (.env.local is created by `vercel link` / `vercel env pull`)
 .env
 .env.*
 !.env.example

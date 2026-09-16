@@ -2,11 +2,13 @@
 
 * Local (your PC):  plain JSON files under ./data
 * Vercel:           the same JSON documents in a private Vercel Blob store
-                    (used automatically when BLOB_READ_WRITE_TOKEN is set)
+                    (BLOB_READ_WRITE_TOKEN) or in Upstash Redis (KV_REST_API_URL /
+                    KV_REST_API_TOKEN) - whichever the project has connected
 
 Paths look like  users/<email-hash>.json,  data/<user-id>/jobs.json,  data/<user-id>/jobs/<job-id>.json
 Job documents can be large, so they are stored gzip-compressed on Blob (".json.gz").
 """
+import base64
 import gzip
 import json
 import os
@@ -123,12 +125,52 @@ class BlobStore:
                 raise StorageError(f"Blob delete failed ({r.status_code})")
 
 
+class RedisStore:
+    """JSON documents in Upstash Redis (Vercel Marketplace), through its REST API.
+    Keys are the document paths; gzip job files are stored base64-encoded."""
+    kind = "redis"
+
+    def __init__(self, url: str, token: str):
+        self.url = url.rstrip("/")
+        self.token = token
+        self.session = requests.Session()
+
+    def _cmd(self, *args):
+        r = self.session.post(self.url, json=[str(a) for a in args],
+                              headers={"Authorization": f"Bearer {self.token}"}, timeout=30)
+        if not r.ok:
+            raise StorageError(f"Redis {args[0]} failed ({r.status_code}): {r.text[:200]}")
+        return r.json().get("result")
+
+    def get_json(self, key: str):
+        val = self._cmd("GET", key)
+        return json.loads(val) if val else None
+
+    def put_json(self, key: str, obj):
+        self._cmd("SET", key, json.dumps(obj, ensure_ascii=False))
+
+    def get_gz(self, key: str) -> bytes | None:
+        val = self._cmd("GET", key)
+        return base64.b64decode(val) if val else None
+
+    def put_gz(self, key: str, data: bytes):
+        self._cmd("SET", key, base64.b64encode(data).decode())
+
+    def delete(self, key: str):
+        self._cmd("DEL", key)
+
+
 def get_store():
     token = os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip()
     if token:
         return BlobStore(token)
+    redis_url = (os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL") or "").strip()
+    redis_token = (os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN") or "").strip()
+    if redis_url and redis_token:
+        return RedisStore(redis_url, redis_token)
     if os.environ.get("VERCEL"):
-        raise StorageError("No Blob store connected: set BLOB_READ_WRITE_TOKEN in the Vercel project")
+        raise StorageError("No storage connected: add a Vercel Blob store (BLOB_READ_WRITE_TOKEN) "
+                           "or an Upstash Redis database (KV_REST_API_URL / KV_REST_API_TOKEN)")
     return LocalStore(local_data_dir())
 
 

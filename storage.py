@@ -125,8 +125,36 @@ class BlobStore:
                 raise StorageError(f"Blob delete failed ({r.status_code})")
 
 
-class RedisStore:
-    """JSON documents in Upstash Redis (Vercel Marketplace), through its REST API.
+class RedisUrlStore:
+    """JSON documents in Redis (Upstash on Vercel), over the normal Redis protocol
+    using REDIS_URL. Gzip job files are stored as raw bytes."""
+    kind = "redis"
+
+    def __init__(self, url: str):
+        import redis  # imported here so local runs don't need the package
+
+        self.client = redis.from_url(url, socket_timeout=15, socket_connect_timeout=10,
+                                     retry_on_timeout=True, health_check_interval=30)
+
+    def get_json(self, key: str):
+        val = self.client.get(key)
+        return json.loads(val) if val else None
+
+    def put_json(self, key: str, obj):
+        self.client.set(key, json.dumps(obj, ensure_ascii=False).encode("utf-8"))
+
+    def get_gz(self, key: str) -> bytes | None:
+        return self.client.get(key)
+
+    def put_gz(self, key: str, data: bytes):
+        self.client.set(key, data)
+
+    def delete(self, key: str):
+        self.client.delete(key)
+
+
+class RedisRestStore:
+    """JSON documents in Upstash Redis through its REST API (KV_REST_API_URL / KV_REST_API_TOKEN).
     Keys are the document paths; gzip job files are stored base64-encoded."""
     kind = "redis"
 
@@ -164,13 +192,16 @@ def get_store():
     token = os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip()
     if token:
         return BlobStore(token)
-    redis_url = (os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL") or "").strip()
-    redis_token = (os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN") or "").strip()
-    if redis_url and redis_token:
-        return RedisStore(redis_url, redis_token)
+    rest_url = (os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL") or "").strip()
+    rest_token = (os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN") or "").strip()
+    if rest_url and rest_token:
+        return RedisRestStore(rest_url, rest_token)
+    redis_url = (os.environ.get("REDIS_URL") or os.environ.get("KV_URL") or "").strip()
+    if redis_url:
+        return RedisUrlStore(redis_url)
     if os.environ.get("VERCEL"):
-        raise StorageError("No storage connected: add a Vercel Blob store (BLOB_READ_WRITE_TOKEN) "
-                           "or an Upstash Redis database (KV_REST_API_URL / KV_REST_API_TOKEN)")
+        raise StorageError("No storage connected: add a Redis database (REDIS_URL) or a Vercel Blob store "
+                           "(BLOB_READ_WRITE_TOKEN) in the project's Storage tab")
     return LocalStore(local_data_dir())
 
 

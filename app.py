@@ -34,7 +34,7 @@ def load_env(path: Path):
 load_env(BASE / ".env")
 
 from auth import (SESSION_HOURS, KeyBox, Users, current_api_key, load_secret_key, login_required,  # noqa: E402
-                  normalize_email, now_iso, start_session, validate_signup, verify_password)
+                  normalize_email, now_iso, start_session, user_key, validate_signup, verify_password)
 from serper_client import SerperClient, SerperError  # noqa: E402
 from storage import StorageError, get_store, local_data_dir  # noqa: E402
 from tools import TOOL_LIST, TOOLS, to_int  # noqa: E402
@@ -238,6 +238,22 @@ def api_change_password():
 
 
 # ================================================================ tools API
+
+@app.post("/api/me/delete")
+@login_required(api=True, need_key=False)
+def api_delete_account():
+    """Delete the account and everything stored for it."""
+    user = users.get(session["email"])
+    if not user or not verify_password(body().get("password") or "", user["password"]):
+        return jsonify({"error": "Password is wrong."}), 400
+    uid = session["uid"]
+    for job in load_index(uid)["jobs"]:
+        store.delete(job_key(uid, job["id"]))
+    store.delete(jobs_index_key(uid))
+    store.delete(user_key(user["email"]))
+    session.clear()
+    return jsonify({"ok": True})
+
 
 @app.get("/api/tools")
 @login_required(api=True)

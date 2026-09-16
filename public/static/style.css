@@ -80,6 +80,8 @@ code { font: 13px ui-monospace, Consolas, monospace; background: var(--soft); pa
 .settings-card .lbl { margin-top: 12px; }
 .settings-card .btn { margin-top: 12px; }
 .welcome { border-color: var(--accent); background: var(--accent-soft); }
+.settings-card.danger { border-color: var(--red); }
+.settings-card.danger h3 { color: var(--red); }
 
 .credits {
   white-space: nowrap; padding: 6px 12px; border-radius: 999px; background: var(--accent-soft);

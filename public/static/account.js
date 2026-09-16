@@ -76,6 +76,21 @@
     });
   }
 
+  const delForm = $("delForm");
+  if (delForm) {
+    delForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      show("delErr", "");
+      if (!confirm("Delete your account, API key and all scraped jobs? This cannot be undone.")) return;
+      try {
+        await post("/api/me/delete", { password: $("delPw").value });
+        location.href = "/login";
+      } catch (err) {
+        show("delErr", err.message);
+      }
+    });
+  }
+
   const pwForm = $("pwForm");
   if (pwForm) {
     pwForm.addEventListener("submit", async (e) => {

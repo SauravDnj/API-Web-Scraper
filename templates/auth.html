@@ -1,48 +1,69 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ "Log in" if mode == "login" else "Create account" }} · Serper Data Scraper</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+{% include "_head.html" %}
+  <title>{{ "Log in" if mode == "login" else "Create account" }} · Waloop Data Scraper</title>
 </head>
 <body class="auth-body">
-<main class="auth-wrap">
-  <div class="auth-brand">
-    <span class="logo">📍</span>
-    <h1>Serper Data Scraper</h1>
-    <p>Google Maps, Search, Reviews, News, Shopping &amp; Webpage data — exported to CSV and Excel.</p>
-  </div>
-
-  <div class="panel auth-card">
-    <div class="auth-tabs">
-      <a href="{{ url_for('login_page') }}" class="{{ 'active' if mode == 'login' }}">Log in</a>
-      <a href="{{ url_for('signup_page') }}" class="{{ 'active' if mode == 'signup' }}">Create account</a>
+{% include "_icons.html" %}
+<main class="auth-shell">
+  <section class="auth-hero" aria-label="About Waloop Data Scraper">
+    <div class="auth-hero-glow" aria-hidden="true"></div>
+    <div class="auth-brand">
+      {% with size="lg" %}{% include "_logo.html" %}{% endwith %}
+      <h1>Waloop <span>Data Scraper</span></h1>
+      <p>Business leads and web data from Google, exported to CSV and Excel in minutes.</p>
     </div>
+    <ul class="feature-list">
+      <li><span class="feat-ico"><svg class="ico" aria-hidden="true"><use href="#i-map"/></svg></span>
+        <div><b>Google Maps leads</b><small>Nearby area grid collects thousands of businesses per city.</small></div></li>
+      <li><span class="feat-ico"><svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg></span>
+        <div><b>Mobile numbers only</b><small>Skips landlines and removes duplicate businesses automatically.</small></div></li>
+      <li><span class="feat-ico"><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg></span>
+        <div><b>Multiple API keys</b><small>Credits add up and calls move to the next key when one runs out.</small></div></li>
+      <li><span class="feat-ico"><svg class="ico" aria-hidden="true"><use href="#i-sheet"/></svg></span>
+        <div><b>Ready-to-use exports</b><small>Clean CSV and Excel files with 91-format phone numbers.</small></div></li>
+    </ul>
+  </section>
 
-    <form id="authForm" data-mode="{{ mode }}" novalidate>
-      {% if mode == "signup" %}
-      <label class="lbl" for="name">Name <small>(optional)</small></label>
-      <input id="name" name="name" type="text" autocomplete="name" placeholder="Your name">
-      {% endif %}
-      <label class="lbl" for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com">
-      <label class="lbl" for="password">Password {% if mode == "signup" %}<small>(min 8 characters)</small>{% endif %}</label>
-      <div class="pw-row">
-        <input id="password" name="password" type="password" required minlength="8"
-               autocomplete="{{ 'current-password' if mode == 'login' else 'new-password' }}" placeholder="••••••••">
-        <button type="button" class="btn ghost sm" data-toggle-pw="password">Show</button>
+  <section class="auth-side">
+    <div class="auth-brand compact">
+      {% include "_logo.html" %}
+      <span class="brand-name">Waloop <b>Data Scraper</b></span>
+    </div>
+    <div class="panel auth-card">
+      <h2 class="auth-title">{{ "Welcome back" if mode == "login" else "Create your account" }}</h2>
+      <p class="muted auth-lead">{{ "Log in to continue scraping." if mode == "login" else "Start collecting leads with your own Serper API keys." }}</p>
+      <div class="auth-tabs" role="tablist">
+        <a href="{{ url_for('login_page') }}" class="{{ 'active' if mode == 'login' }}" role="tab" aria-selected="{{ 'true' if mode == 'login' else 'false' }}">Log in</a>
+        <a href="{{ url_for('signup_page') }}" class="{{ 'active' if mode == 'signup' }}" role="tab" aria-selected="{{ 'true' if mode == 'signup' else 'false' }}">Create account</a>
       </div>
-      <p class="err" id="formErr" hidden></p>
-      <button class="btn primary big" type="submit" id="submitBtn">{{ "Log in" if mode == "login" else "Create account" }}</button>
-      <p class="hint center">
-        {% if mode == "login" %}New here? <a href="{{ url_for('signup_page') }}">Create an account</a>
-        {% else %}Already have an account? <a href="{{ url_for('login_page') }}">Log in</a>{% endif %}
-      </p>
-      <p class="hint center">You stay logged in for 24 hours.</p>
-    </form>
-  </div>
+
+      <form id="authForm" data-mode="{{ mode }}" novalidate>
+        {% if mode == "signup" %}
+        <label class="lbl" for="name">Name <small>(optional)</small></label>
+        <input id="name" name="name" type="text" autocomplete="name" placeholder="Your name">
+        {% endif %}
+        <label class="lbl" for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com">
+        <label class="lbl" for="password">Password {% if mode == "signup" %}<small>(min 8 characters)</small>{% endif %}</label>
+        <div class="pw-row">
+          <input id="password" name="password" type="password" required minlength="8"
+                 autocomplete="{{ 'current-password' if mode == 'login' else 'new-password' }}" placeholder="••••••••">
+          <button type="button" class="btn ghost sm" data-toggle-pw="password"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg><span>Show</span></button>
+        </div>
+        <p class="err" id="formErr" role="alert" hidden></p>
+        <button class="btn primary big" type="submit" id="submitBtn">
+          <span>{{ "Log in" if mode == "login" else "Create account" }}</span><svg class="ico" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+        </button>
+        <p class="hint center">
+          {% if mode == "login" %}New here? <a href="{{ url_for('signup_page') }}">Create an account</a>
+          {% else %}Already have an account? <a href="{{ url_for('login_page') }}">Log in</a>{% endif %}
+        </p>
+        <p class="hint center with-ico"><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg>You stay logged in for 24 hours.</p>
+      </form>
+    </div>
+  </section>
 </main>
 <script src="{{ url_for('static', filename='account.js') }}?v={{ asset_v }}"></script>
 </body>

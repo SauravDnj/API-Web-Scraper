@@ -184,7 +184,7 @@ def col(key, label, type_="text", show=True, **extra):
 class Tool:
     id = ""
     label = ""
-    icon = ""
+    icon = ""             # SVG icon name from templates/_icons.html
     description = ""
     endpoint = ""
     list_key = ""
@@ -298,7 +298,7 @@ class QueryTool(Tool):
 # ---------------------------------------------------------------- query tools
 
 class SearchTool(QueryTool):
-    id, label, icon, endpoint, list_key = "search", "Search", "🔎", "search", "organic"
+    id, label, icon, endpoint, list_key = "search", "Search", "search", "search", "organic"
     description = "Google web results. Phones and emails are pulled from titles and snippets."
     max_pages, location, categories = 10, True, True
     options = [{"key": "tbs", "label": "Time range", "type": "select", "choices": TIME_RANGES}]
@@ -320,7 +320,7 @@ class SearchTool(QueryTool):
 
 
 class ImagesTool(QueryTool):
-    id, label, icon, endpoint, list_key = "images", "Images", "🖼️", "images", "images"
+    id, label, icon, endpoint, list_key = "images", "Images", "image", "images", "images"
     description = "Google Images: image URL, size, source page."
     max_pages, location = 10, True
     options = [{"key": "tbs", "label": "Time range", "type": "select", "choices": TIME_RANGES}]
@@ -342,7 +342,7 @@ class ImagesTool(QueryTool):
 
 
 class VideosTool(QueryTool):
-    id, label, icon, endpoint, list_key = "videos", "Videos", "🎬", "videos", "videos"
+    id, label, icon, endpoint, list_key = "videos", "Videos", "video", "videos", "videos"
     description = "Google Videos: YouTube, Facebook, Instagram and other video results."
     max_pages, location = 10, True
     options = [{"key": "tbs", "label": "Time range", "type": "select", "choices": TIME_RANGES}]
@@ -393,7 +393,7 @@ PLACE_OPTIONS = [
 
 
 class MapsTool(QueryTool):
-    id, label, icon, endpoint, list_key = "maps", "Maps", "🗺️", "maps", "places"
+    id, label, icon, endpoint, list_key = "maps", "Maps", "map", "maps", "places"
     description = ("Google Maps business leads: phone, website, address, rating, hours, GPS. "
                    "Turn on 'Nearby area grid' to collect 1,000 - 10,000+ leads around each location.")
     credits, per_page, max_pages, default_pages = 3, 20, 10, 3
@@ -537,7 +537,7 @@ class MapsTool(QueryTool):
 
 
 class PlacesTool(MapsTool):
-    id, label, icon, endpoint, list_key = "places", "Places", "📍", "places", "places"
+    id, label, icon, endpoint, list_key = "places", "Places", "map-pin", "places", "places"
     description = "Google local 'Places' results - cheaper (1 credit) with fewer fields than Maps."
     credits, per_page, max_pages, default_pages = 1, 10, 10, 3
     columns, filters, stats, options = PLACE_COLUMNS, PLACE_FILTERS, PLACE_STATS, PLACE_OPTIONS
@@ -546,7 +546,7 @@ class PlacesTool(MapsTool):
 
 
 class NewsTool(QueryTool):
-    id, label, icon, endpoint, list_key = "news", "News", "📰", "news", "news"
+    id, label, icon, endpoint, list_key = "news", "News", "newspaper", "news", "news"
     description = "Google News articles."
     max_pages, location = 10, True
     options = [{"key": "tbs", "label": "Time range", "type": "select", "choices": TIME_RANGES}]
@@ -564,7 +564,7 @@ class NewsTool(QueryTool):
 
 
 class ShoppingTool(QueryTool):
-    id, label, icon, endpoint, list_key = "shopping", "Shopping", "🛒", "shopping", "shopping"
+    id, label, icon, endpoint, list_key = "shopping", "Shopping", "cart", "shopping", "shopping"
     description = "Google Shopping products: price, store, rating."
     credits, per_page, max_pages = 2, 40, 5
     columns = [col("thumbnail", "Image", "image", full_key="link"), col("title", "Product", "link", href_key="link"),
@@ -588,7 +588,7 @@ class ShoppingTool(QueryTool):
 
 
 class ScholarTool(QueryTool):
-    id, label, icon, endpoint, list_key = "scholar", "Scholar", "🎓", "scholar", "organic"
+    id, label, icon, endpoint, list_key = "scholar", "Scholar", "graduation", "scholar", "organic"
     description = "Google Scholar papers: authors, year, citations, PDF."
     max_pages, country = 10, False
     columns = [col("title", "Title", "link", href_key="link"), col("publication", "Authors / Publication", "long"),
@@ -609,7 +609,7 @@ class ScholarTool(QueryTool):
 
 
 class PatentsTool(QueryTool):
-    id, label, icon, endpoint, list_key = "patents", "Patents", "📜", "patents", "organic"
+    id, label, icon, endpoint, list_key = "patents", "Patents", "file-text", "patents", "organic"
     description = "Google Patents: number, inventor, assignee, dates, PDF."
     max_pages, country = 10, False
     columns = [col("title", "Title", "link", href_key="link"), col("publication_number", "Number"),
@@ -635,7 +635,7 @@ class PatentsTool(QueryTool):
 
 
 class AutocompleteTool(QueryTool):
-    id, label, icon, endpoint, list_key = "autocomplete", "Autocomplete", "⌨️", "autocomplete", "suggestions"
+    id, label, icon, endpoint, list_key = "autocomplete", "Autocomplete", "keyboard", "autocomplete", "suggestions"
     description = "Google search suggestions - great for keyword / topic research."
     max_pages, location = 1, True
     input_label = "Seed keywords"
@@ -653,7 +653,7 @@ class AutocompleteTool(QueryTool):
 # ---------------------------------------------------------------- id / url tools
 
 class ReviewsTool(Tool):
-    id, label, icon, endpoint, list_key = "reviews", "Reviews", "⭐", "reviews", "reviews"
+    id, label, icon, endpoint, list_key = "reviews", "Reviews", "star", "reviews", "reviews"
     description = "Google Maps reviews for places (by CID, Place ID or FID). Import places from a Maps or Places job."
     mode, per_page, max_pages, default_pages = "ids", 20, 20, 1
     input_label = "Places (one per line)"
@@ -720,7 +720,7 @@ class ReviewsTool(Tool):
 
 
 class LensTool(Tool):
-    id, label, icon, endpoint, list_key = "lens", "Image Search (Lens)", "🔍", "lens", "organic"
+    id, label, icon, endpoint, list_key = "lens", "Image Search (Lens)", "scan-search", "lens", "organic"
     description = "Google Lens reverse image search: pages and products that show a similar image."
     mode, credits, per_page = "urls", 3, 60
     input_label = "Image URLs (one per line)"
@@ -755,7 +755,7 @@ class LensTool(Tool):
 
 
 class WebpageTool(Tool):
-    id, label, icon = "webpage", "Webpage", "🌐"
+    id, label, icon = "webpage", "Webpage", "globe"
     description = "Scrape any web page: title, text, markdown, emails, phones, social links. Import websites from a Maps job."
     mode, credits, per_page, country, workers = "urls", 2, 1, False, 3
     input_label = "Page URLs (one per line)"

@@ -1,0 +1,14 @@
+{# Waloop mark: a data "W" wave with a live data point. Animates in on load and while a job runs (body.busy). #}
+<svg class="wl-mark{% if size == 'lg' %} lg{% endif %}" viewBox="0 0 40 40" role="img" aria-label="Waloop">
+  <defs>
+    <linearGradient id="wlGrad{{ size or '' }}" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <rect class="wl-tile" width="40" height="40" rx="11" fill="url(#wlGrad{{ size or '' }})"/>
+  <path class="wl-wave" d="M8.5 13.5 14 27l6-10.5L26 27l5.5-13.5" fill="none" stroke="#fff" stroke-width="3.4"
+        stroke-linecap="round" stroke-linejoin="round" pathLength="100"/>
+  <circle class="wl-ping" cx="31.5" cy="13.5" r="3" fill="none" stroke="#FDE68A" stroke-width="1.5"/>
+  <circle class="wl-dot" cx="31.5" cy="13.5" r="3" fill="#FCD34D"/>
+</svg>

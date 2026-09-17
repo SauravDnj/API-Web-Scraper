@@ -1,81 +1,92 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ "Add API key" if first_time else "Settings" }} · Serper Data Scraper</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+{% include "_head.html" %}
+  <title>{{ "Add API keys" if first_time else "Settings" }} · Waloop Data Scraper</title>
 </head>
 <body>
+{% include "_icons.html" %}
 <header class="topbar">
-  <a class="brand" href="/">
-    <span class="logo">📍</span>
-    <div><h1>Serper Data Scraper</h1><p>Account settings</p></div>
+  <a class="brand" href="/" aria-label="Waloop Data Scraper home">
+    {% include "_logo.html" %}
+    <div class="brand-text">
+      <span class="brand-name">Waloop <b>Data Scraper</b></span>
+      <span class="brand-sub">Account settings</span>
+    </div>
   </a>
   <div class="user-menu">
-    {% if not first_time %}<a class="btn ghost sm" href="/">← Back to app</a>{% endif %}
-    <span class="user-chip" title="Logged in">{{ user_email }}</span>
-    <a class="btn ghost sm" href="{{ url_for('logout') }}">Log out</a>
+    {% if not first_time %}<a class="btn ghost sm" href="/"><svg class="ico" aria-hidden="true"><use href="#i-arrow-left"/></svg>Back to app</a>{% endif %}
+    <span class="user-chip" title="Logged in"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>{{ user_email }}</span></span>
+    <a class="btn ghost sm" href="{{ url_for('logout') }}" title="Log out"><svg class="ico" aria-hidden="true"><use href="#i-log-out"/></svg><span class="hide-sm">Log out</span></a>
   </div>
 </header>
 
 <main class="settings-wrap">
   {% if first_time %}
   <section class="panel welcome">
-    <h2>👋 Welcome{% if user_name %}, {{ user_name }}{% endif %}!</h2>
-    <p>One last step: add your <b>Serper.dev API key</b>. Every account uses its own key, so searches spend your own credits.
-      Get a key at <a href="https://serper.dev/api-keys" target="_blank" rel="noopener">serper.dev/api-keys</a>.</p>
+    <span class="card-ico accent" aria-hidden="true"><svg class="ico"><use href="#i-sparkles"/></svg></span>
+    <div>
+      <h2>Welcome to Waloop{% if user_name %}, {{ user_name }}{% endif %}!</h2>
+      <p>One last step: add your <b>Serper.dev API keys</b> (one or many). Every account uses its own keys, so searches spend your own credits.
+        Get a key at <a href="https://serper.dev/api-keys" target="_blank" rel="noopener">serper.dev/api-keys</a>.</p>
+    </div>
   </section>
   {% endif %}
 
   <section class="panel settings-card" id="keyCard">
-    <h3>🔑 Serper API key</h3>
-    <p class="muted" id="keyStatus">Loading…</p>
+    <div class="card-head">
+      <h3><span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-key"/></svg></span>Serper API keys</h3>
+      <button type="button" class="btn ghost sm" id="keysRefresh" hidden><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg><span>Refresh credits</span></button>
+    </div>
+    <p class="muted">Jobs use all enabled keys in turn. When a key runs out of credits it is skipped and the next key takes over.</p>
+    <div class="stats key-totals" id="keyTotals" hidden></div>
+    <div class="key-list" id="keyList"><p class="muted loading-line"><svg class="ico spin" aria-hidden="true"><use href="#i-loader"/></svg>Loading keys…</p></div>
+
     <form id="keyForm" novalidate>
-      <label class="lbl" for="apiKey">{{ "API key" if first_time else "New API key (replaces the current one)" }}</label>
-      <div class="pw-row">
-        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Serper API key">
-        <button type="button" class="btn ghost sm" data-toggle-pw="apiKey">Show</button>
+      <label class="lbl" for="apiKeys">Add API keys <small>(one per line, up to 100)</small></label>
+      <textarea id="apiKeys" rows="4" autocomplete="off" spellcheck="false" placeholder="Paste one or more Serper API keys, one per line&#10;Optional name: Main account | your-api-key"></textarea>
+      <p class="hint">Each key is checked with Serper before it is saved. Keys are stored encrypted and only used for your searches.</p>
+      <p class="err" id="keyErr" role="alert" hidden></p>
+      <p class="ok" id="keyOk" role="status" hidden></p>
+      <div class="btn-row">
+        <button class="btn primary" type="submit" id="keyBtn"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span>{{ "Save keys & start" if first_time else "Add keys" }}</span></button>
+        {% if first_time %}<a class="btn secondary" href="/" id="startBtn" hidden>Continue to app<svg class="ico" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>{% endif %}
       </div>
-      <p class="hint">We check the key with Serper before saving. It is stored encrypted and only used for your searches.</p>
-      <p class="err" id="keyErr" hidden></p>
-      <p class="ok" id="keyOk" hidden></p>
-      <button class="btn primary" type="submit" id="keyBtn">{{ "Save key & start" if first_time else "Replace API key" }}</button>
     </form>
   </section>
 
   {% if not first_time %}
   <section class="panel settings-card">
-    <h3>🔒 Change password</h3>
+    <h3><span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-lock"/></svg></span>Change password</h3>
     <form id="pwForm" novalidate>
       <label class="lbl" for="pwCurrent">Current password</label>
       <input id="pwCurrent" type="password" autocomplete="current-password">
       <label class="lbl" for="pwNew">New password <small>(min 8 characters)</small></label>
       <input id="pwNew" type="password" autocomplete="new-password">
-      <p class="err" id="pwErr" hidden></p>
-      <p class="ok" id="pwOk" hidden></p>
+      <p class="err" id="pwErr" role="alert" hidden></p>
+      <p class="ok" id="pwOk" role="status" hidden></p>
       <button class="btn secondary" type="submit">Change password</button>
     </form>
   </section>
 
   <section class="panel settings-card">
-    <h3>🕒 Session</h3>
+    <h3><span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-clock"/></svg></span>Session</h3>
     <p class="muted" id="sessionInfo">Loading…</p>
   </section>
 
   <section class="panel settings-card danger">
-    <h3>🗑 Delete account</h3>
-    <p class="muted">Permanently deletes your account, your saved API key and all of your scraped jobs. This cannot be undone.</p>
+    <h3><span class="card-ico danger" aria-hidden="true"><svg class="ico"><use href="#i-trash"/></svg></span>Delete account</h3>
+    <p class="muted">Permanently deletes your account, your saved API keys and all of your scraped jobs. This cannot be undone.</p>
     <form id="delForm" novalidate>
       <label class="lbl" for="delPw">Your password</label>
       <input id="delPw" type="password" autocomplete="current-password">
-      <p class="err" id="delErr" hidden></p>
+      <p class="err" id="delErr" role="alert" hidden></p>
       <button class="btn danger" type="submit">Delete my account</button>
     </form>
   </section>
   {% endif %}
 </main>
+<footer class="app-footer">Waloop Data Scraper</footer>
 <script>window.FIRST_TIME = {{ "true" if first_time else "false" }};</script>
 <script src="{{ url_for('static', filename='account.js') }}?v={{ asset_v }}"></script>
 </body>

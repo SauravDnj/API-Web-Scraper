@@ -23,6 +23,8 @@
   const lines = (s) => [...new Set(String(s || "").split(/[\n;]+/).map((x) => x.trim()).filter(Boolean))];
   const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
   const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+  // SVG icon from the sprite in templates/_icons.html
+  const ic = (name, cls = "") => `<svg class="ico${cls ? ` ${cls}` : ""}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
   const opt = (v, l, sel) => `<option value="${esc(v)}"${sel ? " selected" : ""}>${esc(l)}</option>`;
 
   let ME = { email: "" };
@@ -99,9 +101,10 @@
   // ------------------------------------------------------------ tabs
   function renderTabs() {
     const running = new Set([...runners.values()].map((r) => r.tool.id));
+    document.body.classList.toggle("busy", running.size > 0);  // animates the Waloop logo while jobs run
     $("toolTabs").innerHTML = TOOLS.map((t) =>
-      `<button type="button" class="tool-tab${t.id === tool?.id ? " active" : ""}" data-tool="${t.id}">
-        <span>${t.icon}</span> ${esc(t.label)}${running.has(t.id) ? '<i class="dot" title="Running"></i>' : ""}</button>`).join("");
+      `<button type="button" class="tool-tab${t.id === tool?.id ? " active" : ""}" data-tool="${t.id}"${t.id === tool?.id ? ' aria-current="page"' : ""}>
+        ${ic(t.icon)}<span>${esc(t.label)}</span>${running.has(t.id) ? '<i class="dot" title="Running"></i>' : ""}</button>`).join("");
   }
   $("toolTabs").addEventListener("click", (e) => {
     const b = e.target.closest(".tool-tab");
@@ -116,9 +119,10 @@
     store.set("tab", tool.id);
     renderTabs();
     document.querySelector(".tool-tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    $("toolTitle").textContent = `${tool.icon} ${tool.label}`;
+    $("toolTitle").textContent = tool.label;
+    $("toolBadge").innerHTML = ic(tool.icon);
     $("toolDesc").textContent = `${tool.description} · ${tool.credits} credit${tool.credits > 1 ? "s" : ""} per ${tool.mode === "query" ? "page" : "call"}`;
-    $("emptyIcon").textContent = tool.icon;
+    $("emptyIcon").innerHTML = ic(tool.icon);
     renderBuilder();
     renderJobPicker();
     const v = view();
@@ -213,7 +217,7 @@
         <div><b id="estCredits">0</b><span>max credits</span></div></div>
       <p class="est-note" id="estNote" hidden></p>
       <details><summary>Show list</summary><ol id="taskList"></ol></details></section>
-      <button class="btn primary big" id="startBtn" type="button">🚀 Start ${esc(t.label)}</button>
+      <button class="btn primary big" id="startBtn" type="button">${ic("play")}<span>Start ${esc(t.label)}</span></button>
       <p class="err" id="formErr" hidden></p>`);
 
     $("builder").innerHTML = parts.join("");
@@ -292,7 +296,7 @@
   }
   function renderCats() {
     $("catChips").innerHTML = form().categories.map((c, i) =>
-      `<span class="chip">${esc(c)}<button type="button" data-i="${i}" title="Remove">×</button></span>`).join("");
+      `<span class="chip">${esc(c)}<button type="button" data-i="${i}" title="Remove" aria-label="Remove ${esc(c)}">${ic("x")}</button></span>`).join("");
     saveForm(); refreshEstimate();
   }
 
@@ -300,7 +304,7 @@
   function renderLocs() {
     const f = form();
     $("locList").innerHTML = f.locations.length
-      ? f.locations.map((l, i) => `<div class="loc-item"><span>📍 ${esc(locLabel(l))}</span><button type="button" data-i="${i}" title="Remove">×</button></div>`).join("")
+      ? f.locations.map((l, i) => `<div class="loc-item"><span>${ic("map-pin")}${esc(locLabel(l))}</span><button type="button" data-i="${i}" title="Remove" aria-label="Remove location">${ic("x")}</button></div>`).join("")
       : `<p class="hint">No locations added${tool.categories ? " yet" : " - queries run without a location"}.</p>`;
     const sum = document.querySelector("#builder details.adv summary small");
     if (sum) sum.textContent = `(optional, ${f.locations.length} added)`;
@@ -327,11 +331,10 @@
   function renderImportJobs() {
     const opts = [];
     tool.imports.forEach((imp, idx) => {
-      const src = TOOLS.find((x) => x.id === imp.tool);
       const jobs = allJobs.filter((j) => j.tool === imp.tool && j.count);
       if (jobs.length) {
         opts.push(`<optgroup label="${esc(imp.label)}">${jobs.map((j) =>
-          opt(`${idx}|${j.id}`, `${src.icon} ${j.name} (${fmt(j.count)} rows)`)).join("")}</optgroup>`);
+          opt(`${idx}|${j.id}`, `${j.name} (${fmt(j.count)} rows)`)).join("")}</optgroup>`);
       }
     });
     $("impJob").innerHTML = opts.length ? opts.join("") : `<option value="">No ${tool.imports.map((i) => i.tool).join(" / ")} jobs yet</option>`;
@@ -385,15 +388,15 @@
         $("estResults").textContent = fmt(est.max_results);
         $("estCredits").textContent = fmt(est.max_credits);
         const notes = [];
-        if (est.note) notes.push(`<span>ℹ️ ${esc(est.note)}</span>`);
+        if (est.note) notes.push(`<span>${ic("info")}${esc(est.note)}</span>`);
         if (est.limit && est.uncapped_results < est.limit) {
-          notes.push(`<span class="warn">⚠️ These settings can return at most ~${fmt(est.uncapped_results)} results, below your lead limit of ${fmt(est.limit)}. ${t.id === "maps" ? "Increase the radius, use a denser grid, or add more categories/locations." : "Add more queries or pages."}</span>`);
+          notes.push(`<span class="warn">${ic("alert")}These settings can return at most ~${fmt(est.uncapped_results)} results, below your lead limit of ${fmt(est.limit)}. ${t.id === "maps" ? "Increase the radius, use a denser grid, or add more categories/locations." : "Add more queries or pages."}</span>`);
         }
-        if (est.limit) notes.push(`<span>The job stops as soon as ${fmt(est.limit)} unique rows are collected.</span>`);
+        if (est.limit) notes.push(`<span>${ic("check")}The job stops as soon as ${fmt(est.limit)} unique rows are collected.</span>`);
         if (balance !== null && est.max_credits > balance) {
-          notes.push(`<span class="warn">⚠️ Up to ${fmt(est.max_credits)} credits, more than your balance of ${fmt(balance)}. Set a credit budget.</span>`);
+          notes.push(`<span class="warn">${ic("alert")}Up to ${fmt(est.max_credits)} credits, more than your balance of ${fmt(balance)}. Set a credit budget.</span>`);
         } else if (!est.budget && est.max_credits > 1000) {
-          notes.push(`<span class="warn">⚠️ Can use up to ${fmt(est.max_credits)} credits. Set a credit budget to cap spending.</span>`);
+          notes.push(`<span class="warn">${ic("alert")}Can use up to ${fmt(est.max_credits)} credits. Set a credit budget to cap spending.</span>`);
         }
         $("estNote").innerHTML = notes.join("");
         $("estNote").hidden = !notes.length;
@@ -718,7 +721,7 @@
   function renderJobPicker() {
     const jobs = allJobs.filter((j) => j.tool === tool.id);
     $("jobPicker").innerHTML = opt("", `— ${tool.label} jobs (${jobs.length}) —`) + jobs.map((j) => {
-      const live = runners.has(j.id) ? "⏳ " : j.status === "running" || j.status === "paused" ? "⏸ " : "";
+      const live = runners.has(j.id) ? "Running · " : j.status === "running" || j.status === "paused" ? "Paused · " : "";
       const count = runners.has(j.id) ? runners.get(j.id).doc.rows.length : j.count;
       return opt(j.id, `${live}${j.name} · ${fmt(count)} rows · ${String(j.created_at || "").replace("T", " ").slice(0, 16)}`);
     }).join("");
@@ -727,8 +730,13 @@
   $("jobPicker").addEventListener("change", (e) => { if (e.target.value) openJob(e.target.value); });
 
   async function refreshCredits() {
-    try { const a = await api("/api/account"); balance = a.balance; $("credits").textContent = `Credits: ${fmt(a.balance)}`; }
-    catch (e) { $("credits").textContent = "Credits: n/a"; $("credits").title = e.message; }
+    try {
+      const a = await api("/api/account");
+      balance = a.balance;
+      $("creditsText").innerHTML = `<b>${fmt(a.balance)}</b> credits${a.count > 1 ? ` <small>${fmt(a.active)}/${fmt(a.count)} keys</small>` : ""}`;
+      $("credits").title = `Total Serper credits of ${fmt(a.keys)} enabled API key${a.keys === 1 ? "" : "s"}. Per-key credits are in Settings.`;
+    }
+    catch (e) { $("creditsText").textContent = "Credits n/a"; $("credits").title = e.message; }
   }
 
   function showEmpty() {
@@ -780,11 +788,13 @@
     $("jobMeta").textContent = `${fmt(d.total)} ${tool.mode === "query" ? "queries" : "items"} · started ${String(d.created_at || "").replace("T", " ").slice(0, 16)}${d.stop_reason ? ` · ${d.stop_reason}` : ""}${saved}`;
     const status = live ? (live.userStopped ? "stopping" : "running") : d.status;
     const st = $("jobStatus");
-    st.textContent = status; st.className = `status ${status}`;
+    st.innerHTML = `${status === "running" || status === "stopping" ? ic("loader", "spin") : ""}<span>${esc(status)}</span>`;
+    st.className = `status ${status}`;
+    $("progress").classList.toggle("live", !!live);
     $("stopBtn").hidden = !live;
     const resumable = !live && (d.pending || []).length > 0;
     $("resumeBtn").hidden = !resumable;
-    $("resumeBtn").textContent = d.stop_reason && /limit|budget/i.test(d.stop_reason) ? "▶ Continue" : "▶ Resume";
+    $("resumeBtn").querySelector("span").textContent = d.stop_reason && /limit|budget/i.test(d.stop_reason) ? "Continue" : "Resume";
     let pct = d.total ? (d.done / d.total) * 100 : 0;
     if (d.limit) pct = Math.max(pct, (d.rows.length / d.limit) * 100);
     if (!live && d.status === "done") pct = 100;
@@ -949,7 +959,7 @@
       case "image": return `<td>${s ? `<a href="${esc(r[c.full_key] || s)}" target="_blank" rel="noopener"><img class="thumb" src="${esc(s)}" loading="lazy" alt=""></a>` : ""}</td>`;
       case "num": return `<td class="nowrap">${s === "" ? "" : fmt(v)}</td>`;
       case "num1": return `<td class="nowrap">${s === "" ? "" : Number(v).toFixed(2)}</td>`;
-      case "rating": return `<td class="nowrap">${s === "" ? "" : `<span class="star">★</span> ${esc(s)}`}</td>`;
+      case "rating": return `<td class="nowrap">${s === "" ? "" : `<span class="rating">${ic("star", "star")}${esc(s)}</span>`}</td>`;
       case "phone": return `<td class="nowrap">${s.split(", ").filter(Boolean).map((p) => `<a href="tel:${esc(p.replace(/[\s-]/g, ""))}">${esc(p)}</a>`).join("<br>")}</td>`;
       case "email": return `<td class="nowrap">${s.split(", ").filter(Boolean).map((m) => `<a href="mailto:${esc(m)}">${esc(m)}</a>`).join("<br>")}</td>`;
       case "links": return `<td class="nowrap">${s.split("\n").filter(Boolean).map((u) => a(u, shortUrl(u))).join("<br>")}</td>`;
@@ -970,7 +980,7 @@
 
     $("table").querySelector("thead").innerHTML = `<tr><th>#</th>${cols.map((c) => {
       const sorted = v.sort.key === c.key;
-      return `<th data-key="${c.key}" class="${sorted ? "sorted" : ""}" data-dir="${sorted ? (v.sort.dir > 0 ? "▲" : "▼") : ""}">${esc(c.label)}</th>`;
+      return `<th data-key="${c.key}" class="${sorted ? `sorted ${v.sort.dir > 0 ? "asc" : "desc"}` : ""}"${sorted ? ` aria-sort="${v.sort.dir > 0 ? "ascending" : "descending"}"` : ""}>${esc(c.label)}</th>`;
     }).join("")}</tr>`;
     const running = runners.has(v.jobId);
     $("table").querySelector("tbody").innerHTML = pageRows.length
@@ -1056,7 +1066,7 @@
   async function toXlsx(rows, jobName, india) {
     const cols = exportColumns();
     const wb = new ExcelJS.Workbook();
-    wb.creator = "Serper Data Scraper";
+    wb.creator = "Waloop Data Scraper";
     const ws = wb.addWorksheet(tool.label.slice(0, 31), { views: [{ state: "frozen", xSplit: 1, ySplit: 1 }] });
     ws.columns = cols.map((c) => ({ header: c.label, key: c.key, width: WIDE[c.type] || Math.max(12, c.label.length + 4) }));
     ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };

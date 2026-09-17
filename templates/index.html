@@ -1,45 +1,53 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Serper Data Scraper</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+{% include "_head.html" %}
+  <title>Waloop Data Scraper</title>
 </head>
 <body>
+{% include "_icons.html" %}
+<a class="skip-link" href="#results">Skip to results</a>
 <header class="topbar">
-  <a class="brand" href="/">
-    <span class="logo">📍</span>
-    <div>
-      <h1>Serper Data Scraper</h1>
-      <p>Google Search · Maps · Places · Reviews · News · Shopping · Webpage and more</p>
+  <a class="brand" href="/" aria-label="Waloop Data Scraper home">
+    {% include "_logo.html" %}
+    <div class="brand-text">
+      <span class="brand-name">Waloop <b>Data Scraper</b></span>
+      <span class="brand-sub">Maps · Search · Reviews · News · Shopping · Webpage</span>
     </div>
   </a>
   <div class="user-menu">
-    <span class="credits" id="credits" title="Serper.dev credit balance of your API key">Credits: …</span>
-    <span class="user-chip" title="Logged in">{{ user_email }}</span>
-    <a class="btn ghost sm" href="{{ url_for('settings_page') }}" title="API key &amp; password">⚙ Settings</a>
-    <a class="btn ghost sm" href="{{ url_for('logout') }}">Log out</a>
+    <a class="credits" id="credits" href="/settings" title="Total Serper credits of your API keys">
+      <svg class="ico" aria-hidden="true"><use href="#i-coins"/></svg><span id="creditsText">Credits …</span>
+    </a>
+    <span class="user-chip" title="Logged in"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>{{ user_email }}</span></span>
+    <a class="btn ghost sm" href="{{ url_for('settings_page') }}" title="API keys &amp; password">
+      <svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span class="hide-sm">Settings</span>
+    </a>
+    <a class="btn ghost sm" href="{{ url_for('logout') }}" title="Log out">
+      <svg class="ico" aria-hidden="true"><use href="#i-log-out"/></svg><span class="hide-sm">Log out</span>
+    </a>
   </div>
 </header>
 
 <nav class="tool-tabs" id="toolTabs" aria-label="Data sources"></nav>
 
 <main class="layout">
-  <aside class="panel builder" id="builder"></aside>
+  <aside class="panel builder" id="builder" aria-label="Job settings"></aside>
 
-  <section class="panel results">
+  <section class="panel results" id="results">
     <div class="tool-head">
-      <div>
-        <h2 id="toolTitle"></h2>
-        <p class="muted" id="toolDesc"></p>
+      <div class="tool-title">
+        <span class="tool-badge" id="toolBadge" aria-hidden="true"></span>
+        <div>
+          <h2 id="toolTitle"></h2>
+          <p class="muted" id="toolDesc"></p>
+        </div>
       </div>
-      <select id="jobPicker" title="Jobs run in this tab"></select>
+      <select id="jobPicker" title="Jobs run in this tab" aria-label="Open a previous job"></select>
     </div>
 
     <div class="empty" id="emptyState">
-      <div class="empty-icon" id="emptyIcon">🗂️</div>
+      <div class="empty-icon" id="emptyIcon" aria-hidden="true"></div>
       <h2>No data in this tab yet</h2>
       <p>Fill in the form on the left and click <b>Start</b>. Only this tab's API runs, and its results appear here live, ready to download as CSV or Excel.</p>
     </div>
@@ -52,12 +60,12 @@
         </div>
         <div class="job-actions">
           <span class="status" id="jobStatus">queued</span>
-          <button class="btn primary sm" id="resumeBtn" type="button" hidden>▶ Resume</button>
-          <button class="btn danger sm" id="stopBtn" type="button" hidden>■ Stop</button>
-          <button class="btn ghost sm" id="deleteBtn" type="button">🗑 Delete</button>
+          <button class="btn primary sm" id="resumeBtn" type="button" hidden><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span>Resume</span></button>
+          <button class="btn danger sm" id="stopBtn" type="button" hidden><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg>Stop</button>
+          <button class="btn ghost sm" id="deleteBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg>Delete</button>
         </div>
       </div>
-      <div class="progress"><div class="bar" id="progBar"></div></div>
+      <div class="progress" id="progress"><div class="bar" id="progBar"></div></div>
       <p class="save-warn" id="saveWarn" hidden></p>
       <div class="stats" id="stats"></div>
       <details class="log-box"><summary>Activity log <span id="errCount"></span></summary><div id="log"></div></details>
@@ -67,29 +75,31 @@
       <div class="export-bar">
         <span class="muted" id="showing">0 rows</span>
         <div class="row-btns">
-          <button class="btn secondary sm" id="expCsv" type="button">⬇ Download CSV</button>
-          <button class="btn primary sm" id="expXlsx" type="button">⬇ Download Excel</button>
+          <button class="btn secondary sm" id="expCsv" type="button"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>Download CSV</button>
+          <button class="btn primary sm" id="expXlsx" type="button"><svg class="ico" aria-hidden="true"><use href="#i-sheet"/></svg>Download Excel</button>
         </div>
       </div>
 
       <div class="table-wrap"><table id="table"><thead></thead><tbody></tbody></table></div>
       <div class="pager">
-        <button class="btn ghost sm" id="prevPg" type="button">‹ Prev</button>
+        <button class="btn ghost sm" id="prevPg" type="button"><svg class="ico" aria-hidden="true"><use href="#i-chevron-left"/></svg>Prev</button>
         <span id="pgInfo">1 / 1</span>
-        <button class="btn ghost sm" id="nextPg" type="button">Next ›</button>
-        <select id="pgSize" title="Rows per page"><option>25</option><option selected>50</option><option>100</option><option>250</option><option>500</option><option>1000</option></select>
+        <button class="btn ghost sm" id="nextPg" type="button">Next<svg class="ico" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+        <select id="pgSize" title="Rows per page" aria-label="Rows per page"><option>25</option><option selected>50</option><option>100</option><option>250</option><option>500</option><option>1000</option></select>
       </div>
     </div>
   </section>
 </main>
 
+<footer class="app-footer">Waloop Data Scraper</footer>
+
 <div class="modal" id="modal" hidden>
-  <div class="modal-box" role="dialog" aria-modal="true">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-head">
       <b id="modalTitle"></b>
       <div class="row-btns">
         <button class="btn secondary sm" id="modalCopy" type="button">Copy</button>
-        <button class="btn ghost sm" id="modalClose" type="button">✕</button>
+        <button class="btn ghost sm icon-only" id="modalClose" type="button" aria-label="Close"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
     </div>
     <pre id="modalBody"></pre>

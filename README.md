@@ -1,7 +1,7 @@
-# Serper Data Scraper
+# Waloop Data Scraper
 
 A multi-user web app with **one tab per Serper.dev API**. Each user logs in with email and password,
-adds **their own Serper API key**, and runs scrape jobs. Each tab has its own form, job history,
+adds **their own Serper API keys** (one or many), and runs scrape jobs. Each tab has its own form, job history,
 results table, filters, and CSV / Excel download.
 
 | Tab | API | Input | Credits |
@@ -23,10 +23,14 @@ results table, filters, and CSV / Excel download.
 ## Accounts
 
 - **Create account** with email and password. Passwords are stored as PBKDF2-SHA256 hashes.
-- **First login**: the app asks for your **Serper API key**, checks it with Serper, and saves it encrypted in your user JSON.
-- **Settings** (⚙ in the top bar): replace the API key at any time, change your password, see when your session ends.
+- **First login**: the app asks for your **Serper API keys**, checks each one with Serper, and saves them encrypted in your user JSON.
+- **Settings** (⚙ in the top bar): add many keys at once (one per line, optional `Name | key`, up to 100), see each key's
+  credits and status, rename, disable or remove keys, change your password, see when your session ends.
+- **Multiple keys**: jobs use every enabled key in turn. A key that runs out of credits or is rejected is marked and skipped,
+  and the call is retried with the next key, so a job only stops when all keys fail. **Refresh credits** re-checks every key.
+- The top bar shows the **total credits** of all enabled keys.
 - **Sessions** last **24 hours** from login, then you log in again.
-- Every user has their own API key and only sees their own jobs.
+- Every user has their own API keys and only sees their own jobs.
 
 ## Storage (JSON)
 
@@ -38,7 +42,7 @@ results table, filters, and CSV / Excel download.
 Jobs are gzip-compressed before they are stored.
 
 ```
-users/<sha256(email)>.json          account: email, name, password hash, encrypted API key
+users/<sha256(email)>.json          account: email, name, password hash, encrypted API keys
 accounts/<user-id>/jobs.json        that user's job list
 accounts/<user-id>/jobs/<job>.json  one job: settings, rows, log, progress (for resume)
 ```
@@ -111,6 +115,7 @@ so 1,000 leads ≈ 200 - 300 credits and 10,000 leads ≈ 2,000 - 3,000+ credits
 |---|---|
 | `app.py` | Flask app: pages, auth, tool steps, job saving |
 | `auth.py` | Users, password hashing, API key encryption, 24 h sessions |
+| `apikeys.py` | Multiple API keys per user: add / check balances / rotate calls over keys |
 | `storage.py` | JSON storage: local files or private Vercel Blob |
 | `tools.py` | One class per Serper API: inputs, one-call steps, normalizing, columns, filters |
 | `serper_client.py` | Serper HTTP client with retries |

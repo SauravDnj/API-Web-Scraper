@@ -1,6 +1,7 @@
-"""Serper Data Scraper - multi-user web app.
+"""Waloop Data Scraper - multi-user web app for the Serper.dev APIs.
 
-* Accounts (email + password) and each user's own Serper API key are stored as JSON documents.
+* Accounts (email + password) and each user's own Serper API keys are stored as JSON documents.
+* Scrape calls rotate over the user's enabled keys and skip keys that run out of credits.
 * Sessions last 24 hours from login.
 * Scrape jobs are driven by the browser one API call at a time (works on Vercel's
   short-lived functions) and saved to storage as compressed JSON checkpoints.
@@ -33,9 +34,10 @@ def load_env(path: Path):
 
 load_env(BASE / ".env")
 
-from auth import (SESSION_HOURS, KeyBox, Users, current_api_key, load_secret_key, login_required,  # noqa: E402
+from apikeys import RECHECK_SECONDS, ApiKeys, MultiKeyClient  # noqa: E402
+from auth import (SESSION_HOURS, KeyBox, Users, load_secret_key, login_required,  # noqa: E402
                   normalize_email, now_iso, start_session, user_key, validate_signup, verify_password)
-from serper_client import SerperClient, SerperError  # noqa: E402
+from serper_client import SerperError  # noqa: E402
 from storage import StorageError, get_store, local_data_dir  # noqa: E402
 from tools import TOOL_LIST, TOOLS, to_int  # noqa: E402
 
@@ -60,6 +62,7 @@ except StorageError as e:  # keep the app up so it can explain what is missing
     store, STORE_ERROR = None, str(e)
 keybox = KeyBox(app.config["SECRET_KEY"])
 users = Users(store, keybox)
+apikeys = ApiKeys(users, keybox)
 ASSET_VERSION = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or str(int(time.time())))[:10]
 # Blob writes are limited on the free plan, so save running jobs less often there
 CHECKPOINT_SECONDS = 180 if getattr(store, "kind", "") == "blob" else 30 if getattr(store, "kind", "") == "redis" else 15
@@ -139,7 +142,7 @@ def signup_page():
 @app.get("/api-key")
 @login_required(need_key=False)
 def api_key_page():
-    return render_template("settings.html", first_time=not session.get("k"))
+    return render_template("settings.html", first_time=not (session.get("nk") or session.get("k")))
 
 
 @app.get("/settings")
@@ -169,7 +172,7 @@ def api_signup():
     user = users.create(email, password, data.get("name") or "")
     if is_first_local_user:
         migrate_legacy_jobs(user["id"])
-    start_session(user, keybox)
+    start_session(user, 0)
     return jsonify({"ok": True, "next": url_for("api_key_page")})
 
 
@@ -182,9 +185,10 @@ def api_login():
     if not user or not ok:
         time.sleep(0.6)
         return jsonify({"error": "Wrong email or password."}), 401
-    start_session(user, keybox)
+    key_count = apikeys.count_enabled(user)
+    start_session(user, key_count)
     nxt = data.get("next") if str(data.get("next") or "").startswith("/") and not str(data.get("next")).startswith("//") else "/"
-    return jsonify({"ok": True, "next": nxt if user.get("api_key") else url_for("api_key_page")})
+    return jsonify({"ok": True, "next": nxt if key_count else url_for("api_key_page")})
 
 
 @app.post("/api/auth/logout")
@@ -197,29 +201,82 @@ def api_logout():
 @login_required(api=True, need_key=False)
 def api_me():
     return jsonify({
-        "email": session["email"], "name": session.get("name", ""), "has_key": bool(session.get("k")),
-        "api_key_last4": session.get("k4", ""), "session_expires_at": session["iat"] + SESSION_HOURS * 3600,
+        "email": session["email"], "name": session.get("name", ""),
+        "has_key": bool(session.get("nk") or session.get("k")), "session_expires_at": session["iat"] + SESSION_HOURS * 3600,
         "storage": store.kind, "checkpoint_seconds": CHECKPOINT_SECONDS,
     })
 
 
-@app.post("/api/me/api-key")
-@login_required(api=True, need_key=False)
-def api_set_key():
-    api_key = (body().get("api_key") or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9_-]{20,128}", api_key):
-        return jsonify({"error": "That doesn't look like a Serper API key."}), 400
-    try:
-        account = SerperClient(api_key).account()
-    except SerperError as e:
-        return jsonify({"error": f"Serper rejected this key: {e}"}), 400
+def current_user():
     user = users.get(session["email"])
     if not user:
         session.clear()
-        return jsonify({"error": "Account not found.", "auth": True}), 401
-    users.set_api_key(user, api_key)
-    session["k"], session["k4"] = user["api_key"], user["api_key_last4"]
-    return jsonify({"ok": True, "last4": user["api_key_last4"], "balance": account.get("balance")})
+    return user
+
+
+def keys_response(user, summary=None, **extra):
+    """Key list for Settings; also keeps the session's key count in step."""
+    summary = summary or apikeys.summary(user)
+    session["nk"] = summary["enabled"]
+    session.pop("k", None)
+    session.pop("k4", None)
+    return jsonify({**summary, **extra})
+
+
+NO_USER = ({"error": "Account not found.", "auth": True}, 401)
+
+
+@app.get("/api/me/keys")
+@login_required(api=True, need_key=False)
+def api_list_keys():
+    user = current_user()
+    return keys_response(user) if user else NO_USER
+
+
+@app.post("/api/me/keys")
+@login_required(api=True, need_key=False)
+def api_add_keys():
+    """Add one or many keys (one per line, optional 'Label | key'). Each is checked with Serper first."""
+    user = current_user()
+    if not user:
+        return NO_USER
+    text = str(body().get("keys") or "")
+    if not text.strip():
+        return jsonify({"error": "Paste at least one API key."}), 400
+    result = apikeys.add(user, text)
+    if not result["added"]:
+        return jsonify({"error": "No keys were added.", "errors": result["errors"]}), 400
+    return keys_response(user, **result)
+
+
+@app.post("/api/me/keys/refresh")
+@login_required(api=True, need_key=False)
+def api_refresh_keys():
+    user = current_user()
+    return keys_response(user, apikeys.refresh(user)) if user else NO_USER
+
+
+@app.post("/api/me/keys/<key_id>")
+@login_required(api=True, need_key=False)
+def api_update_key(key_id):
+    user = current_user()
+    if not user:
+        return NO_USER
+    data = body()
+    if not apikeys.update(user, key_id, {k: data[k] for k in ("enabled", "label") if k in data}):
+        return jsonify({"error": "Key not found."}), 404
+    return keys_response(user)
+
+
+@app.delete("/api/me/keys/<key_id>")
+@login_required(api=True, need_key=False)
+def api_remove_key(key_id):
+    user = current_user()
+    if not user:
+        return NO_USER
+    if not apikeys.remove(user, key_id):
+        return jsonify({"error": "Key not found."}), 404
+    return keys_response(user)
 
 
 @app.post("/api/me/password")
@@ -264,10 +321,12 @@ def list_tools():
 @app.get("/api/account")
 @login_required(api=True)
 def account():
-    try:
-        return jsonify(SerperClient(current_api_key(keybox)).account())
-    except SerperError as e:
-        return jsonify({"error": str(e)}), 502
+    """Total credits over the enabled keys (balances older than a minute are re-checked)."""
+    user = current_user()
+    if not user:
+        return NO_USER
+    s = apikeys.refresh(user, max_age=RECHECK_SECONDS)
+    return jsonify({"balance": s["total_balance"], "keys": s["enabled"], "active": s["active"], "count": s["count"]})
 
 
 def _tool(tool_id):
@@ -329,7 +388,7 @@ def run_step(tool_id):
         return jsonify({"error": "missing task"}), 400
     claimed = data.get("claimed") if isinstance(data.get("claimed"), list) else []
     try:
-        return jsonify(tool.step(SerperClient(current_api_key(keybox)), data.get("spec") or {}, task,
+        return jsonify(tool.step(MultiKeyClient(apikeys, session["email"]), data.get("spec") or {}, task,
                                  data.get("cursor"), claimed))
     except SerperError as e:
         return jsonify({"error": str(e), "fatal": e.fatal, "rows": [], "credits": 0, "next": None})
@@ -447,5 +506,5 @@ def migrate_legacy_jobs(uid: str):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"\n  Serper Data Scraper running at http://127.0.0.1:{port}  (storage: {store.kind})\n")
+    print(f"\n  Waloop Data Scraper running at http://127.0.0.1:{port}  (storage: {store.kind})\n")
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)

@@ -1,5 +1,5 @@
 """Accounts: email + password users stored as JSON documents, each with their own
-Serper API key (encrypted at rest). Sessions are signed cookies that expire 24 hours
+Serper API keys (encrypted at rest, see apikeys.py). Sessions are signed cookies that expire 24 hours
 after login, so logging in costs no storage writes."""
 import base64
 import hashlib
@@ -77,7 +77,7 @@ class Users:
     def create(self, email: str, password: str, name: str = "") -> dict:
         email = normalize_email(email)
         user = {"id": uuid.uuid4().hex, "email": email, "name": name.strip()[:80], "password": hash_password(password),
-                "api_key": "", "api_key_last4": "", "api_key_updated_at": None,
+                "api_keys": [],
                 "created_at": now_iso(), "updated_at": now_iso()}
         self.store.put_json(user_key(email), user)
         return user
@@ -85,12 +85,6 @@ class Users:
     def save(self, user: dict):
         user["updated_at"] = now_iso()
         self.store.put_json(user_key(user["email"]), user)
-
-    def set_api_key(self, user: dict, api_key: str):
-        user["api_key"] = self.keybox.encrypt(api_key)
-        user["api_key_last4"] = api_key[-4:]
-        user["api_key_updated_at"] = now_iso()
-        self.save(user)
 
 
 def validate_signup(email: str, password: str) -> str:
@@ -103,24 +97,19 @@ def validate_signup(email: str, password: str) -> str:
 
 # ---------------------------------------------------------------- sessions
 
-def start_session(user: dict, keybox: KeyBox):
+def start_session(user: dict, key_count: int):
     session.clear()
     session.permanent = True
     session["uid"] = user["id"]
     session["email"] = user["email"]
     session["name"] = user.get("name", "")
     session["iat"] = int(time.time())
-    session["k"] = user.get("api_key", "")          # encrypted Serper key (never the plain key)
-    session["k4"] = user.get("api_key_last4", "")
+    session["nk"] = key_count  # enabled API keys; the keys themselves stay in storage (50 keys won't fit a cookie)
 
 
 def session_valid() -> bool:
     iat = session.get("iat")
     return bool(session.get("uid")) and isinstance(iat, int) and time.time() - iat < SESSION_HOURS * 3600
-
-
-def current_api_key(keybox: KeyBox) -> str:
-    return keybox.decrypt(session.get("k", "")) if session.get("k") else ""
 
 
 def login_required(api: bool = False, need_key: bool = True):
@@ -132,7 +121,7 @@ def login_required(api: bool = False, need_key: bool = True):
                 if api:
                     return jsonify({"error": "Your session expired. Please log in again.", "auth": True}), 401
                 return redirect(url_for("login_page", next=request.path))
-            if need_key and not session.get("k"):
+            if need_key and not (session.get("nk") or session.get("k")):  # "k": sessions from before multi-key
                 if api:
                     return jsonify({"error": "Add your Serper API key first.", "need_key": True}), 403
                 return redirect(url_for("api_key_page"))

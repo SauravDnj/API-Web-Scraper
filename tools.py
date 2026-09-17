@@ -74,6 +74,26 @@ def find_phones(text: str) -> list[str]:
     return out
 
 
+def indian_mobile(phone) -> str:
+    """'098250 12345' / '+91 98250-12345' -> '+91 98250 12345'. Landlines ('0261 246 5555',
+    '079 2658 1234'), toll-free and other numbers -> ''."""
+    for part in re.split(r"[,/;]", str(phone or "")):
+        groups = re.findall(r"\d+", part)
+        digits = "".join(groups)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+            groups = groups[1:] if groups and groups[0] == "91" else [digits]
+        elif len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+            groups = [groups[0][1:]] + groups[1:] if groups else groups
+        if not re.fullmatch(r"[6-9]\d{9}", digits):
+            continue
+        if len(groups) > 1 and 2 <= len(groups[0]) <= 4:  # "674 234 5678" = STD code + landline
+            continue
+        return f"+91 {digits[:5]} {digits[5:]}"
+    return ""
+
+
 def find_emails(text: str) -> list[str]:
     return list(dict.fromkeys(e for e in EMAIL_RE.findall(text or "") if not EMAIL_JUNK.search(e)))
 
@@ -185,6 +205,7 @@ class Tool:
     input_placeholder = ""
     workers = 4           # tasks the browser runs in parallel
     merge_field = ""      # when a duplicate row arrives, append this field's value (e.g. Maps categories)
+    dedupe = False        # also treat rows with the same phone, or name + address, as duplicates
 
     def meta(self) -> dict:
         return {
@@ -194,7 +215,7 @@ class Tool:
             "categories": self.categories, "country": self.country, "options": self.options,
             "columns": self.columns, "filters": self.filters, "stats": self.stats, "imports": self.imports,
             "input_label": self.input_label, "input_placeholder": self.input_placeholder,
-            "workers": self.workers, "merge_field": self.merge_field,
+            "workers": self.workers, "merge_field": self.merge_field, "dedupe": self.dedupe,
         }
 
     def pages(self, spec) -> int:
@@ -359,8 +380,16 @@ PLACE_FILTERS = [
     {"type": "has", "key": "phone", "label": "Has phone"},
     {"type": "has", "key": "website", "label": "Has website"},
     {"type": "not", "key": "website", "label": "No website"},
+    {"type": "mobile", "key": "phone", "label": "Mobile only"},
+    {"type": "unique", "key": "phone", "label": "Hide duplicates"},
 ]
 PLACE_STATS = [{"label": "With phone", "key": "phone"}, {"label": "With website", "key": "website"}]
+PLACE_OPTIONS = [
+    {"key": "mobile_only", "label": "Mobile numbers only - skip landlines (0261..., 079...) and places without a phone",
+     "type": "checkbox", "default": True, "wide": True},
+    {"key": "dedupe", "label": "Remove duplicates - same phone number, or same business name + address",
+     "type": "checkbox", "default": True, "wide": True},
+]
 
 
 class MapsTool(QueryTool):
@@ -374,7 +403,8 @@ class MapsTool(QueryTool):
     filters = PLACE_FILTERS + [{"type": "max", "key": "distance_km", "label": "Any distance", "choices": [1, 2, 3, 5, 10, 20],
                                 "suffix": " km"}]
     stats = PLACE_STATS
-    options = [
+    dedupe = True
+    options = PLACE_OPTIONS + [
         {"key": "grid", "label": "Nearby area grid - search around each location until the lead limit is reached",
          "type": "checkbox", "default": True, "wide": True},
         {"key": "radius", "label": "Nearby radius", "type": "select", "default": "5", "depends": "grid",
@@ -425,11 +455,11 @@ class MapsTool(QueryTool):
             ll = cursor.get("ll") or data.get("ll")
             center = cursor.get("center") or parse_ll(ll)
             places = data.get(self.list_key) or []
-            rows = self._rows(places, {**task, "center": center}, task["q"])
+            rows, skipped = self._rows(places, {**task, "center": center}, task["q"], spec)
             grid_start = {"phase": "grid", "idx": 0, "gpage": 1, "center": list(center)} if grid and center else None
             more = len(places) >= self.per_page and page < self.pages(spec) and ll
             nxt = {"phase": "base", "page": page + 1, "ll": ll, "center": center and list(center)} if more else grid_start
-            return self.result(rows, data.get("credits", self.credits), nxt, grid_start)
+            return self.result(rows, data.get("credits", self.credits), nxt, grid_start, count=skipped)
 
         # grid phase
         center = tuple(cursor["center"])
@@ -449,11 +479,12 @@ class MapsTool(QueryTool):
             p["page"] = gpage
         data = client.post(self.endpoint, p)
         places = data.get(self.list_key) or []
-        rows = self._rows(places, {**task, "center": center}, f"{task['term']} near {point_ll}")
+        rows, skipped = self._rows(places, {**task, "center": center}, f"{task['term']} near {point_ll}", spec)
         next_point = {"phase": "grid", "idx": idx + 1, "gpage": 1, "center": list(center)} if idx + 1 < len(points) else None
         same_point = ({"phase": "grid", "idx": idx, "gpage": gpage + 1, "center": list(center)}
                       if len(places) >= self.per_page and gpage < grid_pages else None)
-        extra = {"claim": self.cell_key(term, zoom, cell), "count": {"grid_points": 1}} if gpage == 1 else {}
+        extra = {"claim": self.cell_key(term, zoom, cell), "count": {**skipped, "grid_points": 1}} if gpage == 1 \
+            else {"count": skipped}
         return self.result(rows, data.get("credits", self.credits), same_point or next_point, next_point,
                            progress=f"point {idx + 1}/{len(points)}", **extra)
 
@@ -461,11 +492,23 @@ class MapsTool(QueryTool):
     def cell_key(term, zoom, cell) -> str:
         return f"{term}|{zoom}|{cell[0]}|{cell[1]}"
 
-    def _rows(self, places, task, query):
-        rows = [self.normalize(i, task) for i in places]
-        for r in rows:
+    def _rows(self, places, task, query, spec):
+        """Normalized rows, minus non-mobile numbers when 'Mobile numbers only' is on.
+        Returns (rows, {"not_mobile": n}) so the browser can show how many were skipped."""
+        mobile_only = (spec.get("options") or {}).get("mobile_only", False)
+        india = (clean(spec.get("country")) or "in").lower() == "in"
+        rows, skipped = [], 0
+        for place in places:
+            r = self.normalize(place, task)
             r["query"] = query
-        return rows
+            if mobile_only:
+                mobile = indian_mobile(r["phone"]) if india else r["phone"]
+                if not mobile:
+                    skipped += 1
+                    continue
+                r["phone"] = mobile
+            rows.append(r)
+        return rows, ({"not_mobile": skipped} if skipped else {})
 
     def key(self, row):
         return row.get("cid") or row.get("place_id") or f"{row.get('name', '').lower()}|{row.get('address', '').lower()}"
@@ -497,7 +540,7 @@ class PlacesTool(MapsTool):
     id, label, icon, endpoint, list_key = "places", "Places", "📍", "places", "places"
     description = "Google local 'Places' results - cheaper (1 credit) with fewer fields than Maps."
     credits, per_page, max_pages, default_pages = 1, 10, 10, 3
-    columns, filters, stats, options = PLACE_COLUMNS, PLACE_FILTERS, PLACE_STATS, []
+    columns, filters, stats, options = PLACE_COLUMNS, PLACE_FILTERS, PLACE_STATS, PLACE_OPTIONS
     estimate = QueryTool.estimate
     step = QueryTool.step
 

@@ -435,11 +435,45 @@
   // ------------------------------------------------------------ runner
   // The browser runs the job: one server call = one Serper API call, so it works on
   // Vercel's short-lived functions. Progress is saved to the server as gzip checkpoints.
+  // Indian mobile number from a phone cell ("098250 12345", "+91 98250-12345"), "" for landlines.
+  // Same rules as indian_mobile() in tools.py.
+  function indianMobile(value) {
+    for (const part of cellText(value).split(/[,/;]/)) {
+      let groups = part.match(/\d+/g) || [];
+      let digits = groups.join("");
+      if (digits.length === 12 && digits.startsWith("91")) {
+        digits = digits.slice(2);
+        groups = groups[0] === "91" ? groups.slice(1) : [digits];
+      } else if (digits.length === 11 && digits.startsWith("0")) {
+        digits = digits.slice(1);
+        groups = [groups[0].slice(1), ...groups.slice(1)];
+      }
+      if (!/^[6-9]\d{9}$/.test(digits)) continue;
+      if (groups.length > 1 && groups[0].length >= 2 && groups[0].length <= 4) continue; // STD code + landline
+      return digits;
+    }
+    return "";
+  }
+
+  // Keys that mark two place rows as the same lead: same phone number, or same name + address.
+  function duplicateKeys(r) {
+    const keys = [];
+    const digits = cellText(r.phone).split(/[,/;]/)[0].replace(/\D/g, "");
+    if (digits.length >= 8) keys.push(`p:${digits.slice(-10)}`);
+    const name = cellText(r.name).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const addr = cellText(r.address).toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (name && addr) keys.push(`na:${name}|${addr}`);
+    return keys;
+  }
+
   class Runner {
     constructor(toolMeta, doc) {
       this.tool = toolMeta;
       this.doc = doc;
       this.keys = new Map(doc.rows.map((r) => [r._key, r]));
+      this.dupes = new Map(); // duplicateKeys() -> row, when "Remove duplicates" is on
+      this.dedupe = !!toolMeta.dedupe && doc.spec?.options?.dedupe !== false;
+      if (this.dedupe) doc.rows.forEach((r) => duplicateKeys(r).forEach((k) => { if (!this.dupes.has(k)) this.dupes.set(k, r); }));
       this.claimed = new Set(doc.claimed || []);
       this.queue = (doc.pending || []).slice();
       this.active = new Map();
@@ -472,7 +506,12 @@
       const d = this.doc, mf = this.tool.merge_field;
       let added = 0;
       for (const r of rows || []) {
-        const old = this.keys.get(r._key);
+        const dupKeys = this.dedupe ? duplicateKeys(r) : [];
+        let old = this.keys.get(r._key);
+        if (!old && dupKeys.length) {
+          old = dupKeys.map((k) => this.dupes.get(k)).find(Boolean);
+          if (old) d.counters.duplicates = (d.counters.duplicates || 0) + 1;
+        }
         if (old) {
           if (mf && r[mf]) {
             const parts = String(old[mf] || "").split("|").map((x) => x.trim()).filter(Boolean);
@@ -482,6 +521,7 @@
         }
         if (d.limit && d.rows.length >= d.limit) break;
         this.keys.set(r._key, r);
+        dupKeys.forEach((k) => { if (!this.dupes.has(k)) this.dupes.set(k, r); });
         d.rows.push(r);
         added++;
       }
@@ -767,6 +807,8 @@
     ];
     if (c.grid_points) cards.push(["Nearby points", fmt(c.grid_points)]);
     if (c.api_calls) cards.push(["API calls", fmt(c.api_calls)]);
+    if (c.not_mobile) cards.push(["Skipped (no mobile)", fmt(c.not_mobile)]);
+    if (c.duplicates) cards.push(["Duplicates removed", fmt(c.duplicates)]);
     tool.stats.forEach((s) => cards.push([s.label, fmt(d.rows.filter((r) => r[s.key]).length)]));
     if (d.errors) cards.push(["Errors", fmt(d.errors)]);
     $("stats").innerHTML = cards.map(([l, n]) => `<div class="stat"><span>${esc(l)}</span><b>${n}</b></div>`).join("");
@@ -853,6 +895,7 @@
   function filtered() {
     const v = view();
     const text = (v.filters.text || "").trim().toLowerCase();
+    const seen = new Set();
     let out = rowsOf(v).filter((r) => {
       if (text && !Object.entries(r).some(([k, val]) => k !== "_key" && String(val ?? "").toLowerCase().includes(text))) return false;
       return tool.filters.every((flt, i) => {
@@ -864,10 +907,20 @@
         }
         if (flt.type === "min") return Number(r[flt.key]) >= Number(val);
         if (flt.type === "max") return cellText(r[flt.key]) !== "" && Number(r[flt.key]) <= Number(val);
+        if (flt.type === "mobile") return !!indianMobile(r[flt.key]);
+        if (flt.type === "unique") return true; // applied below, after the other filters
         const has = flt.key.split("|").some((k) => cellText(r[k]).trim());
         return flt.type === "has" ? has : !has;
       });
     });
+    if (tool.filters.some((flt, i) => flt.type === "unique" && v.filters[i])) {
+      out = out.filter((r) => {
+        const keys = duplicateKeys(r);
+        const dup = keys.some((k) => seen.has(k));
+        keys.forEach((k) => seen.add(k));
+        return !dup;
+      });
+    }
     const { key, dir } = v.sort;
     if (key) {
       const numeric = ["num", "num1", "rating"].includes(tool.columns.find((c) => c.key === key)?.type);
@@ -962,6 +1015,27 @@
   // Files are built in the browser (no upload limits): every column the tool defines, thumbnails last.
   const exportColumns = () => [...tool.columns.filter((c) => c.type !== "image"), ...tool.columns.filter((c) => c.type === "image")];
   const exportValue = (v) => (typeof v === "string" && v.startsWith("data:") ? "" : v ?? "");
+  // Phone cells are exported as plain digits with the country code: "098250 12345",
+  // "+91 98250-12345" and "9825012345" all become "919825012345". Several numbers stay comma separated.
+  function exportPhones(value, india) {
+    return cellText(value).split(/[,/;]/).map((part) => {
+      let digits = part.replace(/\D/g, "");
+      if (!india) return digits;
+      if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+      if (digits.length === 10) digits = `91${digits}`;
+      return digits;
+    }).filter(Boolean).join(", ");
+  }
+  // A row with several phone numbers becomes one row per number (other columns copied).
+  function splitPhoneRows(rows, india) {
+    const phoneCol = exportColumns().find((c) => c.type === "phone");
+    if (!phoneCol) return rows;
+    return rows.flatMap((r) => {
+      const phones = exportPhones(r[phoneCol.key], india).split(", ").filter(Boolean);
+      return phones.length > 1 ? phones.map((p) => ({ ...r, [phoneCol.key]: p })) : [r];
+    });
+  }
+  const exportCell = (r, c, india) => (c.type === "phone" ? exportPhones(r[c.key], india) : exportValue(r[c.key]));
   const WIDE = { long: 50, view: 40, links: 40, url: 40, link: 36, title: 34, email: 30, phone: 20 };
 
   function saveFile(blob, filename) {
@@ -971,15 +1045,15 @@
     setTimeout(() => URL.revokeObjectURL(link.href), 10000);
   }
 
-  function toCsv(rows) {
+  function toCsv(rows, india) {
     const cols = exportColumns();
-    const q = (v) => { const s = String(exportValue(v)); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const q = (v) => { const s = String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const out = [cols.map((c) => q(c.label)).join(",")];
-    rows.forEach((r) => out.push(cols.map((c) => q(r[c.key])).join(",")));
+    rows.forEach((r) => out.push(cols.map((c) => q(exportCell(r, c, india))).join(",")));
     return new Blob(["﻿" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
   }
 
-  async function toXlsx(rows, jobName) {
+  async function toXlsx(rows, jobName, india) {
     const cols = exportColumns();
     const wb = new ExcelJS.Workbook();
     wb.creator = "Serper Data Scraper";
@@ -991,7 +1065,7 @@
     rows.forEach((r) => {
       const values = {};
       cols.forEach((c) => {
-        let v = exportValue(r[c.key]);
+        let v = exportCell(r, c, india); // phones stay text so Excel doesn't show 9.19825E+11
         if (typeof v === "string") v = v.slice(0, 32000);
         values[c.key] = v;
       });
@@ -1014,16 +1088,17 @@
   }
 
   async function download(format) {
-    const rows = filtered();
-    if (!rows.length) { alert("Nothing to export yet."); return; }
+    if (!filtered().length) { alert("Nothing to export yet."); return; }
     const btns = [$("expCsv"), $("expXlsx")];
     btns.forEach((b) => { b.disabled = true; });
     try {
       const name = docOf()?.name || tool.label;
+      const india = (docOf()?.spec?.country || "in") === "in";
+      const rows = splitPhoneRows(filtered(), india);
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "").replace(/(\d{8})(\d{4})/, "$1_$2");
       const base = `${name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "data"}_${tool.id}_${stamp}`;
-      if (format === "csv") saveFile(toCsv(rows), `${base}.csv`);
-      else saveFile(await toXlsx(rows, name), `${base}.xlsx`);
+      if (format === "csv") saveFile(toCsv(rows, india), `${base}.csv`);
+      else saveFile(await toXlsx(rows, name, india), `${base}.xlsx`);
     } catch (e) {
       alert(`Export failed: ${e.message}`);
     } finally {
